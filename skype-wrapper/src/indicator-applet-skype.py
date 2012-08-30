@@ -33,7 +33,7 @@
 
 import helpers
 
-if helpers.haveUnity():
+if helpers.isUnityRunning():
     import unitylauncher
     
 from gi.repository import GObject
@@ -61,6 +61,7 @@ import binascii
 import threading
 
 bus = dbus.SessionBus()
+wrapperPath = "/home/toni/workspace/skype-wrapper/skype-wrapper/src"
 
 #def do_nothing(indicator):
  #   True
@@ -298,7 +299,7 @@ class NotificationServer:
     self.indicators = {}
     for _id in self.skype.unread_conversations:
         self.show_indicator(self.skype.unread_conversations[int(_id)])
-    if helpers.haveUnity():
+    if helpers.isUnityRunning():
         unitylauncher.count(len(self.indicators) + self.skype.incomingfilecount)
         unitylauncher.createUnreadMessageQuickList(self.skype.unread_conversations, self.show_conversation_quicklist)
         unitylauncher.redrawQuicklist()  
@@ -344,7 +345,7 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = "/home/toni/workspace/skype-wrapper/skype-wrapper/src/icons/skype-wrapper-48.svg"
+            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
       
     helpers.notify(name, online_text, icon, "online://"+user.Handle, False, False)  
   
@@ -366,9 +367,9 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = "/home/toni/workspace/skype-wrapper/skype-wrapper/src/icons/skype-wrapper-48.svg"
+            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
     
-    if helpers.haveUnity():
+    if helpers.isUnityRunning():
         unitylauncher.count(len(self.indicators) + self.skype.incomingfilecount)
         unitylauncher.createUnreadMessageQuickList(self.skype.unread_conversations, self.show_conversation_quicklist)
         unitylauncher.redrawQuicklist()  
@@ -392,7 +393,7 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = "/home/toni/workspace/skype-wrapper/skype-wrapper/src/icons/skype-wrapper-48.svg"
+            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
             
     helpers.notify("File Transfer", text, icon, "filetransfer"+transfer.partner_username, True, True)  
 
@@ -512,7 +513,7 @@ class FileTransfer:
     self.partner = skype_transfer.PartnerDisplayName
     self.partner_username = skype_transfer.PartnerHandle
     
-class MyDBUSService(dbus.service.Object):
+class WrapperDBUSService(dbus.service.Object):
     def __init__(self):
         bus_name = dbus.service.BusName('org.skypewrapper.skypewrapper', bus=dbus.SessionBus())
         dbus.service.Object.__init__(self, bus_name, '/org/skypewrapper/skypewrapper')
@@ -555,13 +556,14 @@ class SkypeBehaviour:
             active_player = "unknown"
             player_paused = False
         del self.calls[call.PartnerHandle]
-        
-    unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
-    unitylauncher.redrawQuicklist()  
+    if helper.isUnityRunning():    
+        unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
+        unitylauncher.redrawQuicklist()  
     
     # wiggle the launcher
     if self.call_ringing > 0 and not self.calls_ringing_started:
-        unitylauncher.urgent()
+        if helpers.isUnityRunning():
+            unitylauncher.urgent()
         GObject.timeout_add(1000, self.calls_ringing)
         
     icon = ""
@@ -570,7 +572,7 @@ class SkypeBehaviour:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = "/home/toni/workspace/skype-wrapper/skype-wrapper/src/icons/skype-wrapper-48.svg"
+            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
     
     partner = call.PartnerDisplayName or call.PartnerHandle
     notification = ""
@@ -615,14 +617,15 @@ class SkypeBehaviour:
         self.skype._SetMute(True)
     if action == 'UNMUTE':
         self.skype._SetMute(False)
-                
-    unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
-    unitylauncher.redrawQuicklist()  
+    if helpers.isUnityRunning():             
+        unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
+        unitylauncher.redrawQuicklist()  
     
   def calls_ringing(self) :
     self.calls_ringing_started = True
     if self.call_ringing > 0:
-        unitylauncher.urgent()
+        if helpers.isUnityRunning():
+            unitylauncher.urgent()
     else :
         self.calls_ringing_started = False
     return self.call_ringing > 0
@@ -734,10 +737,10 @@ class SkypeBehaviour:
             if str(v.type) == "INCOMING":
                 if "NEW" in str(v.status):
                     self.incomingfilecount = self.incomingfilecount + 1
-                    if helpers.haveUnity():
+                    if helpers.isUnityRunning():
                         unitylauncher.urgent(True)
                 else:
-                    if helpers.haveUnity():
+                    if helpers.isUnityRunning():
                         unitylauncher.urgent(False)
                 
                 if settings.get_show_incoming_filetransfer_progress():
@@ -766,7 +769,7 @@ class SkypeBehaviour:
                         self.filetransfers[k].notifications[str(v.status)] = str(v.status)
                         if self.cb_log_transfer:
                             self.cb_log_transfer(v, "* " + v.partner+ " finished sending you a file")
-                        if helpers.haveUnity():
+                        if helpers.isUnityRunning():
                             unitylauncher.urgent(True)
                     if "FAILED" in v.status:
                         self.filetransfers[k].notifications[str(v.status)] = str(v.status)
@@ -774,7 +777,7 @@ class SkypeBehaviour:
                             self.cb_log_transfer(v, "* " + v.partner+ " failed to send you a file")
                 else:
                     if "COMPLETED" in v.status:
-                        if helpers.haveUnity():
+                        if helpers.isUnityRunning():
                             unitylauncher.urgent(False)
                         
             if str(v.type) == "OUTGOING":                
@@ -806,10 +809,10 @@ class SkypeBehaviour:
                
         if self.filetransfer['total'] > -1:
             currentprogress = float(self.filetransfer['current']) / float(self.filetransfer['total'])
-            if helpers.haveUnity():
+            if helpers.isUnityRunning():
                 unitylauncher.progress(currentprogress)
         else:
-            if helpers.haveUnity():
+            if helpers.isUnityRunning():
                 unitylauncher.progress(-1)
             
         if oldincoming != self.incomingfilecount and self.cb_read_within_skype:
@@ -899,7 +902,7 @@ class SkypeBehaviour:
             if self.cb_read_within_skype:
                 self.cb_read_within_skype()
                 
-            if helpers.haveUnity():
+            if helpers.isUnityRunning():
                 unitylauncher.urgent(True)
                 unitylauncher.urgent(False)
             
@@ -1056,9 +1059,11 @@ class SkypeBehaviour:
     log("Attached complete", INFO)
     
     #self.skype.Timeout = 30000
-    unitylauncher.launcher.SkypeAgent = self.skype.Client
-    unitylauncher.launcher.skype = self.skype
-    unitylauncher.launcher.redrawQuicklist()
+    if helpers.isUnityRunning():
+        unitylauncher.launcher.SkypeAgent = self.skype.Client
+        unitylauncher.launcher.skype = self.skype
+        unitylauncher.launcher.redrawQuicklist()
+        
     self.skype.Client.Minimize()
     self.name_mappings = {}
     self.unread_conversations = {}
@@ -1098,15 +1103,12 @@ class SkypeBehaviour:
     GObject.timeout_add(CB_INTERVALS, self.checkFileTransfers)
 
 if __name__ == "__main__":
-    #os.chdir('/usr/share/skype-wrapper')
-    os.chdir('/home/toni/workspace/skype-wrapper/skype-wrapper/src')   
+    os.chdir(wrapperPath)   
     loop = GObject.MainLoop()    
     skype = SkypeBehaviour();
     server = NotificationServer()
     GObject.timeout_add(CB_INTERVALS, skype.runCheck)
-#    DBusGMainLoop(set_as_default=True)
-#    dbus.set_default_main_loop(loop)
-    servicesw = MyDBUSService()
+    wrapperservice = WrapperDBUSService()
   
     skype.SetShowConversationCallback(server.show_conversation)
     skype.SetShowIndicatorCallback(server.show_indicator)
