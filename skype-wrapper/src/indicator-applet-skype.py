@@ -33,11 +33,12 @@
 
 import helpers
 
-if helpers.isUnityRunning():
+if helpers.haveUnity():
     import unitylauncher
     
 from gi.repository import GObject
 import indicate
+import gtk
 import Skype4Py
 import shared
 import settings
@@ -46,13 +47,9 @@ import os
 import sys
 import commands
 import time
+import dbus
 import subprocess
 import shlex
-
-import dbus
-import dbus.service
-import dbus.glib
-#from dbus.mainloop.glib import DBusGMainLoop
 
 from PIL import Image
 import StringIO
@@ -61,10 +58,9 @@ import binascii
 import threading
 
 bus = dbus.SessionBus()
-wrapperPath = "/home/toni/workspace/skype-wrapper/skype-wrapper/src"
 
-#def do_nothing(indicator):
- #   True
+def do_nothing(indicator):
+    True
     
 AppletRunning = True
     
@@ -160,103 +156,6 @@ def log(message, level):
             f.close()
         print LOGTYPES[level] + message
 
-def isSkypeRunning():
-    output = commands.getoutput('pgrep -x -l skype -u $USER')
-    return 'skype' in output    
-
-
-player_paused = False
-active_player = "unknown"
-
-def controlMusicPlayer():
-    global active_player, player_paused
-    MediaPlayer = ('amarok', 'audacious', 'bangarang', 'banshee', 'clementine', 'dap', 'exaile', 'gmusicbrowser', 'gogglesmm', 'guayadeque', 'quodlibet', 'rhythmbox')
-    
-    for item in MediaPlayer:
-        if item == 'amarok' or item == 'audacious' or item == 'banshee' or item == 'clementine' or item == 'gmusicbrowser' or item == 'guayadeque' or item == 'rhythmbox':
-            if bus.name_has_owner('org.mpris.MediaPlayer2.' + item):
-                remote_player = bus.get_object('org.mpris.MediaPlayer2.' + item, '/org/mpris/MediaPlayer2')
-                properties_manager = dbus.Interface(remote_player, 'org.freedesktop.DBus.Properties')
-                curr_Status = properties_manager.Get('org.mpris.MediaPlayer2.Player', 'PlaybackStatus')
-                player_action = dbus.Interface(remote_player, 'org.mpris.MediaPlayer2.Player')
-                if curr_Status == "Playing":
-                    player_action.Pause()
-                    active_player = item
-                    player_paused = True
-                    break
-                elif curr_Status == "Paused" and active_player == item and player_paused == True:
-                    player_action.Play()
-                    break
-                    
-        elif item == 'bangarang' or item == 'dap' or item == 'gogglesmm':
-            if bus.name_has_owner('org.mpris.' + item):
-                remote_player = bus.get_object('org.mpris.' + item, '/Player')
-                first_Status = remote_player.PositionGet()
-                time.sleep(1)
-                second_Status = remote_player.PositionGet()
-                if first_Status != second_Status:
-                    remote_player.Pause()
-                    active_player = item
-                    player_paused = True
-                    break
-                elif active_player == item and player_paused == True:
-                    remote_player.Pause()
-                    break
-                    
-        elif item == "exaile":
-            if bus.name_has_owner('org.exaile.Exaile'):
-                remote_player = bus.get_object('org.exaile.Exaile', '/org/exaile/Exaile')
-                curr_Status = remote_player.GetState()
-                if curr_Status == "playing":
-                    remote_player.PlayPause()
-                    active_player = item
-                    player_paused = True
-                    break
-                elif curr_Status == "paused" and active_player == item and player_paused == True:
-                    remote_player.PlayPause()
-                    break
-                    
-        elif item == "quodlibet":
-            if bus.name_has_owner('net.sacredchao.QuodLibet'):
-                remote_player = bus.get_object('net.sacredchao.QuodLibet', '/net/sacredchao/QuodLibet')
-                curr_Status = remote_player.IsPlaying()
-                if curr_Status == 1:
-                    remote_player.Pause()
-                    active_player = item
-                    player_paused = True
-                    break
-                elif curr_Status == 0 and active_player == item and player_paused == True:
-                    remote_player.Play()
-                    break
-        else:
-            player_paused = True
-
-
-volume_level = "unknown"
-
-def SaveRestore_Volume():
-    global volume_level, numid            
-    if volume_level == "unknown":
-        searchstring = ",iface=MIXER,name='Master Playback Volume'"
-        output = commands.getoutput('amixer controls | grep "' + searchstring + '"')
-        if output:
-            numid= output.replace(searchstring, "")
-            searchstring = "  : values="
-            output = commands.getoutput('amixer cget ' + numid + ' | grep "' + searchstring + '"')
-            if output:
-                volume_level = output.replace(searchstring, "")
-            else:
-                log("Couldn't determine Volume", WARNING)
-        else:
-            log("Master Mixer not found", WARNING)
-    elif not volume_level == "unknown":
-        searchstring = "  : values="
-        output = commands.getoutput('amixer cset ' + numid + ' ' + volume_level +  ' | grep "' + searchstring + volume_level + '"')
-        if output == searchstring + volume_level:
-            log("Restored Volume", INFO)
-        else:
-            log("Volume not restored", WARNING)
-
 # this is the high-level notification functionality
 class NotificationServer:
   def __init__(self):
@@ -299,7 +198,7 @@ class NotificationServer:
     self.indicators = {}
     for _id in self.skype.unread_conversations:
         self.show_indicator(self.skype.unread_conversations[int(_id)])
-    if helpers.isUnityRunning():
+    if helpers.haveUnity():
         unitylauncher.count(len(self.indicators) + self.skype.incomingfilecount)
         unitylauncher.createUnreadMessageQuickList(self.skype.unread_conversations, self.show_conversation_quicklist)
         unitylauncher.redrawQuicklist()  
@@ -345,7 +244,7 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
+            icon = "/usr/share/skype-wrapper/icons/skype-wrapper-48.svg"
       
     helpers.notify(name, online_text, icon, "online://"+user.Handle, False, False)  
   
@@ -367,9 +266,9 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
+            icon = "/usr/share/skype-wrapper/icons/skype-wrapper-48.svg"
     
-    if helpers.isUnityRunning():
+    if helpers.haveUnity():
         unitylauncher.count(len(self.indicators) + self.skype.incomingfilecount)
         unitylauncher.createUnreadMessageQuickList(self.skype.unread_conversations, self.show_conversation_quicklist)
         unitylauncher.redrawQuicklist()  
@@ -393,7 +292,7 @@ class NotificationServer:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
+            icon = "/usr/share/skype-wrapper/icons/skype-wrapper-48.svg"
             
     helpers.notify("File Transfer", text, icon, "filetransfer"+transfer.partner_username, True, True)  
 
@@ -512,16 +411,105 @@ class FileTransfer:
     self.status = skype_transfer.Status
     self.partner = skype_transfer.PartnerDisplayName
     self.partner_username = skype_transfer.PartnerHandle
+
+def isSkypeRunning():
+    output = commands.getoutput('pgrep -x -l skype -u $USER')
+    return 'skype' in output    
+
+
+player_paused = False
+active_player = "unknown"
+
+def controlMusicPlayer():
+    global active_player, player_paused
+    MediaPlayer = ('amarok', 'audacious', 'bangarang', 'banshee', 'clementine', 'dap', 'exaile', 'gmusicbrowser', 'gogglesmm', 'guayadeque', 'quodlibet', 'rhythmbox')
     
-class WrapperDBUSService(dbus.service.Object):
-    def __init__(self):
-        bus_name = dbus.service.BusName('org.skypewrapper.skypewrapper', bus=dbus.SessionBus())
-        dbus.service.Object.__init__(self, bus_name, '/org/skypewrapper/skypewrapper')
- 
-    #@dbus.service.method('org.skype-wrapper.skype-wrapper')
-    #def hello(self):
-    #    return "Hello,World!"
-   
+    for item in MediaPlayer:
+        if item == 'amarok' or item == 'audacious' or item == 'banshee' or item == 'clementine' or item == 'gmusicbrowser' or item == 'guayadeque' or item == 'rhythmbox':
+            if bus.name_has_owner('org.mpris.MediaPlayer2.' + item):
+                remote_player = bus.get_object('org.mpris.MediaPlayer2.' + item, '/org/mpris/MediaPlayer2')
+                properties_manager = dbus.Interface(remote_player, 'org.freedesktop.DBus.Properties')
+                curr_Status = properties_manager.Get('org.mpris.MediaPlayer2.Player', 'PlaybackStatus')
+                player_action = dbus.Interface(remote_player, 'org.mpris.MediaPlayer2.Player')
+                if curr_Status == "Playing":
+                    player_action.Pause()
+                    active_player = item
+                    player_paused = True
+                    break
+                elif curr_Status == "Paused" and active_player == item and player_paused == True:
+                    player_action.Play()
+                    break
+                    
+        elif item == 'bangarang' or item == 'dap' or item == 'gogglesmm':
+            if bus.name_has_owner('org.mpris.' + item):
+                remote_player = bus.get_object('org.mpris.' + item, '/Player')
+                first_Status = remote_player.PositionGet()
+                time.sleep(1)
+                second_Status = remote_player.PositionGet()
+                if first_Status != second_Status:
+                    remote_player.Pause()
+                    active_player = item
+                    player_paused = True
+                    break
+                elif active_player == item and player_paused == True:
+                    remote_player.Pause()
+                    break
+                    
+        elif item == "exaile":
+            if bus.name_has_owner('org.exaile.Exaile'):
+                remote_player = bus.get_object('org.exaile.Exaile', '/org/exaile/Exaile')
+                curr_Status = remote_player.GetState()
+                if curr_Status == "playing":
+                    remote_player.PlayPause()
+                    active_player = item
+                    player_paused = True
+                    break
+                elif curr_Status == "paused" and active_player == item and player_paused == True:
+                    remote_player.PlayPause()
+                    break
+                    
+        elif item == "quodlibet":
+            if bus.name_has_owner('net.sacredchao.QuodLibet'):
+                remote_player = bus.get_object('net.sacredchao.QuodLibet', '/net/sacredchao/QuodLibet')
+                curr_Status = remote_player.IsPlaying()
+                if curr_Status == 1:
+                    remote_player.Pause()
+                    active_player = item
+                    player_paused = True
+                    break
+                elif curr_Status == 0 and active_player == item and player_paused == True:
+                    remote_player.Play()
+                    break
+        else:
+            player_paused = True
+
+
+volume_level = "unknown"
+
+def SaveRestore_Volume():
+    global volume_level, numid            
+    if volume_level == "unknown":
+        searchstring = ",iface=MIXER,name='Master Playback Volume'"
+        output = commands.getoutput('amixer controls | grep "' + searchstring + '"')
+        if output:
+            numid= output.replace(searchstring, "")
+            searchstring = "  : values="
+            output = commands.getoutput('amixer cget ' + numid + ' | grep "' + searchstring + '"')
+            if output:
+                volume_level = output.replace(searchstring, "")
+            else:
+                log("Couldn't determine Volume", WARNING)
+        else:
+            log("Master Mixer not found", WARNING)
+    elif not volume_level == "unknown":
+        searchstring = "  : values="
+        output = commands.getoutput('amixer cset ' + numid + ' ' + volume_level +  ' | grep "' + searchstring + volume_level + '"')
+        if output == searchstring + volume_level:
+            log("Restored Volume", INFO)
+        else:
+            log("Volume not restored", WARNING)
+                  
+                                
 class SkypeBehaviour:
   def MessageStatus(self, message, status): 
     self.messageupdatepending = True
@@ -556,14 +544,13 @@ class SkypeBehaviour:
             active_player = "unknown"
             player_paused = False
         del self.calls[call.PartnerHandle]
-    if helper.isUnityRunning():    
-        unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
-        unitylauncher.redrawQuicklist()  
+        
+    unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
+    unitylauncher.redrawQuicklist()  
     
     # wiggle the launcher
     if self.call_ringing > 0 and not self.calls_ringing_started:
-        if helpers.isUnityRunning():
-            unitylauncher.urgent()
+        unitylauncher.urgent()
         GObject.timeout_add(1000, self.calls_ringing)
         
     icon = ""
@@ -572,7 +559,7 @@ class SkypeBehaviour:
         if avatar.filename:
             icon = avatar.filename
         else:
-            icon = wrapperPath + "/icons/skype-wrapper-48.svg"
+            icon = "/usr/share/skype-wrapper/icons/skype-wrapper-48.svg"
     
     partner = call.PartnerDisplayName or call.PartnerHandle
     notification = ""
@@ -617,20 +604,109 @@ class SkypeBehaviour:
         self.skype._SetMute(True)
     if action == 'UNMUTE':
         self.skype._SetMute(False)
-    if helpers.isUnityRunning():             
-        unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
-        unitylauncher.redrawQuicklist()  
+                
+    unitylauncher.createCallsQuickList(self.calls, self.cb_call_action)
+    unitylauncher.redrawQuicklist()  
     
   def calls_ringing(self) :
     self.calls_ringing_started = True
     if self.call_ringing > 0:
-        if helpers.isUnityRunning():
-            unitylauncher.urgent()
+        unitylauncher.urgent()
     else :
         self.calls_ringing_started = False
     return self.call_ringing > 0
     
+  # initialize skype
+  def __init__(self):
+    log("Initializing Skype API", INFO)
+    self.skype = Skype4Py.Skype(None, Transport='x11')
+    self.call_ringing = 0
+    self.calls_ringing_started = False
+    
+    #register events
+    self.skype.RegisterEventHandler('MessageStatus', self.MessageStatus)
+    self.skype.RegisterEventHandler('OnlineStatus', self.OnlineStatus)
+    self.skype.RegisterEventHandler('FileTransferStatusChanged', self.FileTransferStatusChanged)
+    self.skype.RegisterEventHandler('CallStatus', self.CallStatus)
+    
+    self.skype.Timeout = 500
+    
+    if not isSkypeRunning():
+        if settings.get_start_skype_cmd_params():
+            log("Starting Skype with extra params", INFO)
+            subprocess.Popen(shlex.split("skype "+settings.get_start_skype_cmd_params()))
+        else:
+            if not helpers.isSkypeWrapperDesktopOnUnityLauncher():
+                log("Starting Skype process", INFO)
+                subprocess.Popen(shlex.split("skype"))
+            else:
+                log("Starting Skype", INFO)
+                self.skype.Client.Start(Minimized=True)
 
+    log("Waiting for Skype Process", INFO)
+    while True:
+      if isSkypeRunning():
+        break
+
+    log("Attaching skype-wrapper to Skype process", INFO)
+    while True:
+        try:
+            # don't know if its our authorization request but we will wait our turn
+            if not helpers.isAuthorizationRequestOpen():
+                self.skype.Attach(Wait=True)
+                break
+            else:
+                log("Authorization dialog still open", INFO)
+                sys.exit(2)
+        except:
+            # we tell the parent process that the skype couldn't attached
+            log("Failed to attach skype-wrapper to Skype process", WARNING)
+            sys.exit(2) 
+                        
+    log("Attached complete", INFO)
+    
+    #self.skype.Timeout = 30000
+    unitylauncher.launcher.SkypeAgent = self.skype.Client
+    unitylauncher.launcher.skype = self.skype
+    unitylauncher.launcher.redrawQuicklist()
+    self.skype.Client.Minimize()
+    self.name_mappings = {}
+    self.unread_conversations = {}
+    
+    # we will store all outdated messages here, anything not here will get net notified
+    self.conversations = {}
+    
+    # store all the users online for notifying if they're on
+    self.usersonline = {}
+    
+    # stor all file transfers
+    self.filetransfers = {}
+    self.incomingfilecount = 0
+    
+    # store all calls current
+    self.calls = {}
+    
+    self.cb_show_conversation = None
+    self.cb_show_indicator = None
+    self.cb_user_status_change = None
+    self.cb_log_message = None
+    self.cb_read_within_skype = None
+    self.cb_log_transfer = None
+
+    self.initSkypeFirstStart()    
+        
+    self.messageupdatepending = True
+    GObject.timeout_add(CB_INTERVALS, self.checkUnreadMessages)
+    
+    self.onlineuserupdatepending = True
+    GObject.timeout_add(CB_INTERVALS, self.checkOnlineUsers)
+    
+    self.onlinepresenceupdatepending = True
+    GObject.timeout_add(CB_INTERVALS, self.checkOnlineStatus)
+    
+    self.filetransferupdatepending = True
+    GObject.timeout_add(CB_INTERVALS, self.checkFileTransfers)
+    
   def SetShowConversationCallback(self, func):
     self.cb_show_conversation = func
 
@@ -737,10 +813,10 @@ class SkypeBehaviour:
             if str(v.type) == "INCOMING":
                 if "NEW" in str(v.status):
                     self.incomingfilecount = self.incomingfilecount + 1
-                    if helpers.isUnityRunning():
+                    if helpers.haveUnity():
                         unitylauncher.urgent(True)
                 else:
-                    if helpers.isUnityRunning():
+                    if helpers.haveUnity():
                         unitylauncher.urgent(False)
                 
                 if settings.get_show_incoming_filetransfer_progress():
@@ -769,7 +845,7 @@ class SkypeBehaviour:
                         self.filetransfers[k].notifications[str(v.status)] = str(v.status)
                         if self.cb_log_transfer:
                             self.cb_log_transfer(v, "* " + v.partner+ " finished sending you a file")
-                        if helpers.isUnityRunning():
+                        if helpers.haveUnity():
                             unitylauncher.urgent(True)
                     if "FAILED" in v.status:
                         self.filetransfers[k].notifications[str(v.status)] = str(v.status)
@@ -777,7 +853,7 @@ class SkypeBehaviour:
                             self.cb_log_transfer(v, "* " + v.partner+ " failed to send you a file")
                 else:
                     if "COMPLETED" in v.status:
-                        if helpers.isUnityRunning():
+                        if helpers.haveUnity():
                             unitylauncher.urgent(False)
                         
             if str(v.type) == "OUTGOING":                
@@ -809,10 +885,10 @@ class SkypeBehaviour:
                
         if self.filetransfer['total'] > -1:
             currentprogress = float(self.filetransfer['current']) / float(self.filetransfer['total'])
-            if helpers.isUnityRunning():
+            if helpers.haveUnity():
                 unitylauncher.progress(currentprogress)
         else:
-            if helpers.isUnityRunning():
+            if helpers.haveUnity():
                 unitylauncher.progress(-1)
             
         if oldincoming != self.incomingfilecount and self.cb_read_within_skype:
@@ -850,7 +926,7 @@ class SkypeBehaviour:
 	                        self.cb_user_status_change(friend, "went offline")
                         del self.usersonline[friend.Handle]  
         
-        #limitcpu()
+        limitcpu()
     except Exception, e:
         log("Checking online status changing users failed ("+str(e)+")", WARNING)
     return AppletRunning
@@ -902,7 +978,7 @@ class SkypeBehaviour:
             if self.cb_read_within_skype:
                 self.cb_read_within_skype()
                 
-            if helpers.isUnityRunning():
+            if helpers.haveUnity():
                 unitylauncher.urgent(True)
                 unitylauncher.urgent(False)
             
@@ -941,7 +1017,7 @@ class SkypeBehaviour:
                 self.setPresence(new_telepathy_presence)
                 self.telepathy_presence = new_telepathy_presence
             
-        #limitcpu()
+        limitcpu()
     except Exception, e:
         log("Checking online presence failed "+str(e), WARNING)
         raise
@@ -997,134 +1073,47 @@ class SkypeBehaviour:
         return i
     return None
 
-  def runCheck(self):
-      try :
+def runCheck():
+    try :
         log("Check if Skype instance is running", INFO)
-        #print self.skype.IsRunning
-        if not self.skype.Client.IsRunning:
+        #print self.skype.Client.IsRunning
+        #calling self.skype.Client.IsRunning crashes. wtf. begin hack:
+        output = commands.getoutput('pgrep -x -l skype -u $USER')
+        
+        if 'skype' not in output:
             log("Skype instance has terminated, exiting", WARNING)
-            loop.quit()
-      except Exception, e:
-            log("Checking if skype is running failed: "+str(e), WARNING)
+            gtk.main_quit()
+        if 'defunct' in output:
+            log("Skype instance is now defunct, exiting badly", ERROR)
+            gtk.main_quit()
+        limitcpu()
+    except Exception, e:
+        log("Checking if skype is running failed: "+str(e), WARNING)
         
-      return AppletRunning
-
-  # initialize skype
-  def __init__(self):
-    log("Initializing Skype API", INFO)
-    self.skype = Skype4Py.Skype(None, Transport='x11')
-    self.call_ringing = 0
-    self.calls_ringing_started = False
-    
-    #register events
-    self.skype.RegisterEventHandler('MessageStatus', self.MessageStatus)
-    self.skype.RegisterEventHandler('OnlineStatus', self.OnlineStatus)
-    self.skype.RegisterEventHandler('FileTransferStatusChanged', self.FileTransferStatusChanged)
-    self.skype.RegisterEventHandler('CallStatus', self.CallStatus)
-    
-    self.skype.Timeout = 500
-    
-    if not isSkypeRunning():
-        if settings.get_start_skype_cmd_params():
-            log("Starting Skype with extra params", INFO)
-            subprocess.Popen(shlex.split("skype "+settings.get_start_skype_cmd_params()))
-        else:
-            if not helpers.isSkypeWrapperDesktopOnUnityLauncher():
-                log("Starting Skype process", INFO)
-                subprocess.Popen(shlex.split("skype"))
-            else:
-                log("Starting Skype", INFO)
-                self.skype.Client.Start(Minimized=True)
-
-    log("Waiting for Skype Process", INFO)
-    while True:
-      if isSkypeRunning():
-        break
-
-    log("Attaching skype-wrapper to Skype process", INFO)
-    while True:
-        try:
-            # don't know if its our authorization request but we will wait our turn
-            if not helpers.isAuthorizationRequestOpen():
-                self.skype.Attach(Wait=True)
-                break
-            else:
-                log("Authorization dialog still open", INFO)
-                sys.exit(2)
-        except:
-            # we tell the parent process that the skype couldn't attached
-            log("Failed to attach skype-wrapper to Skype process", WARNING)
-            sys.exit(2) 
-                        
-    log("Attached complete", INFO)
-    
-    #self.skype.Timeout = 30000
-    if helpers.isUnityRunning():
-        unitylauncher.launcher.SkypeAgent = self.skype.Client
-        unitylauncher.launcher.skype = self.skype
-        unitylauncher.launcher.redrawQuicklist()
-        
-    self.skype.Client.Minimize()
-    self.name_mappings = {}
-    self.unread_conversations = {}
-    
-    # we will store all outdated messages here, anything not here will get net notified
-    self.conversations = {}
-    
-    # store all the users online for notifying if they're on
-    self.usersonline = {}
-    
-    # stor all file transfers
-    self.filetransfers = {}
-    self.incomingfilecount = 0
-    
-    # store all calls current
-    self.calls = {}
-    
-    self.cb_show_conversation = None
-    self.cb_show_indicator = None
-    self.cb_user_status_change = None
-    self.cb_log_message = None
-    self.cb_read_within_skype = None
-    self.cb_log_transfer = None
-
-    self.initSkypeFirstStart()    
-        
-    self.messageupdatepending = True
-    GObject.timeout_add(CB_INTERVALS, self.checkUnreadMessages)
-    
-    self.onlineuserupdatepending = True
-    GObject.timeout_add(CB_INTERVALS, self.checkOnlineUsers)
-    
-    self.onlinepresenceupdatepending = True
-    GObject.timeout_add(CB_INTERVALS, self.checkOnlineStatus)
-    
-    self.filetransferupdatepending = True
-    GObject.timeout_add(CB_INTERVALS, self.checkFileTransfers)
+    return AppletRunning
 
 if __name__ == "__main__":
-    os.chdir(wrapperPath)   
-    loop = GObject.MainLoop()    
-    skype = SkypeBehaviour();
-    server = NotificationServer()
-    GObject.timeout_add(CB_INTERVALS, skype.runCheck)
-    wrapperservice = WrapperDBUSService()
+  os.chdir('/usr/share/skype-wrapper')
   
-    skype.SetShowConversationCallback(server.show_conversation)
-    skype.SetShowIndicatorCallback(server.show_indicator)
-    skype.SetUserOnlineStatusChangeCallback(server.user_online_status)
-    skype.SetNewMessageCallback(server.new_message)
-    skype.SetFileTransferCallback(server.file_transfer_event)
-    skype.SetSkypeReadCallback(server.reset_indicators)
-    
-    server.connect(skype)
+  skype = SkypeBehaviour();
+  server = NotificationServer()
+  GObject.timeout_add(CB_INTERVALS, runCheck)
   
-    #workaround_show_skype()
+  skype.SetShowConversationCallback(server.show_conversation)
+  skype.SetShowIndicatorCallback(server.show_indicator)
+  skype.SetUserOnlineStatusChangeCallback(server.user_online_status)
+  skype.SetNewMessageCallback(server.new_message)
+  skype.SetFileTransferCallback(server.file_transfer_event)
+  skype.SetSkypeReadCallback(server.reset_indicators)
+  
+  server.connect(skype)
+  
+  #workaround_show_skype()
 
-    # why is this needed?
-    #server.activate_timeout_check()
+  # why is this needed?
+  #server.activate_timeout_check()
 
-    # check for newly unread messages..
-    #skype.check_timeout(server)
-    loop.run()
-    AppletRunning = False
+  # check for newly unread messages..
+  #skype.check_timeout(server)
+  gtk.main()
+  AppletRunning = False

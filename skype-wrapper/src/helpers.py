@@ -33,9 +33,6 @@ import settings
 import shared
 import pynotify
 import wnck
-import dbus
-
-bus = dbus.SessionBus()
 
 PyNotify = True
 if not pynotify.init("Skype Wrapper"):
@@ -59,12 +56,6 @@ def isInstalled(package_name):
     
 def haveUnity():
     return isInstalled('unity') or isInstalled('unity-2d')
-
-def isUnityRunning():
-    if bus.name_has_owner('com.canonical.Unity.Launcher'):
-        return True
-    else:
-        return False
     
 def version(package_name):
     if not isInstalled(package_name):
