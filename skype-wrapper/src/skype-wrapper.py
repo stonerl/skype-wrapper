@@ -65,7 +65,8 @@ def start_skype():
 
 
 if __name__ == "__main__":
-    os.chdir('/usr/share/skype-wrapper')
+    #os.chdir('/usr/share/skype-wrapper')
+    os.chdir('/home/toni/workspace/skype-wrapper/skype-wrapper/src')
 	
     USER = commands.getoutput('whoami')
     output = commands.getoutput('pgrep -x -l indicator-skype -u $USER')
