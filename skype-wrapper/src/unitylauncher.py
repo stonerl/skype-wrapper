@@ -149,7 +149,7 @@ class SkypeWrapperLauncher:
         if call.Status == "MISSED" or call.Status == "FINISHED":
             continue
             
-        partner = call.PartnerDisplayName or call.PartnerHandle
+        partner = call.PartnerDisplayName or call.PartnerFullName or call.PartnerHandle
             
         if call.Status == 'RINGING':
             priority = priority + 1
