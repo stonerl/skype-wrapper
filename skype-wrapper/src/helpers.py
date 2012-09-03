@@ -33,6 +33,9 @@ import settings
 import shared
 import pynotify
 import wnck
+import dbus
+
+bus = dbus.SessionBus()
 
 PyNotify = True
 if not pynotify.init("Skype Wrapper"):
@@ -56,6 +59,18 @@ def isInstalled(package_name):
     
 def haveUnity():
     return isInstalled('unity') or isInstalled('unity-2d')
+
+def isUnityRunning():
+    if bus.name_has_owner('com.canonical.Unity.Launcher'):
+        return True
+    else:
+        return False
+
+def isMissionControlRunning():
+    if bus.name_has_owner('org.freedesktop.Telepathy.MissionControl5'):
+        return True
+    else:
+        return False
     
 def version(package_name):
     if not isInstalled(package_name):
@@ -72,34 +87,6 @@ def isChatBlacklisted(chat) :
     
 def isUserBlacklisted(username) :
     return "'"+username+"'" in settings.get_list_of_silence()
-
-class CPULimiter:
-    def __init__(self, process):
-        shared.set_proc_name('indicator-skype')
-        self.process = process
-        pidsearch = commands.getoutput("ps -A | grep "+self.process).strip()
-        self.pid = None
-        if " " in pidsearch:
-            d = pidsearch.split(" ") 
-            self.pid = d[0]
-        
-    def getCPUUsage(self):
-        if not self.pid:
-            raise Exception("No PID to check cpu usage for")
-        desc, perc = commands.getoutput("ps -p "+self.pid+" -o %cpu").split("\n")
-        self.percentage = float(perc.strip())
-        return self.percentage
-        
-    def limit(self, percentage, Try = 2):
-        while True:
-            curr_percentage = self.getCPUUsage()
-            if curr_percentage > percentage:
-                time.sleep(0.5)
-            else:
-                break;
-
-
-cpulimiter = CPULimiter("indicator-skype")
 
 pynotifications = {}
 

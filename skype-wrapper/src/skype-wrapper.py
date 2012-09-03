@@ -30,16 +30,17 @@
 import subprocess
 import time
 import os
-import commands
 import dbus
 import sys
+
+bus = dbus.SessionBus()
+skype_was_running = False
 	
 def skypeRunning():
-    USER = commands.getoutput('whoami')
-    output = commands.getoutput('pgrep -x -l skype -u $USER')
-    return 'skype' in output
-	
-skype_was_running = False
+	if bus.name_has_owner('com.Skype.API'):
+		return True
+	else:
+		return False
 	
 def start_skype():
     global skype_was_running
@@ -66,19 +67,14 @@ def start_skype():
 
 if __name__ == "__main__":
     os.chdir('/usr/share/skype-wrapper')
-	
-    USER = commands.getoutput('whoami')
-    output = commands.getoutput('pgrep -x -l indicator-skype -u $USER')
-    
+  
     # until the dbus is working just disallow skype-wrapper
-    if 'indicator-skype' in output:
+    if bus.name_has_owner('org.skypewrapper.skypewrapper'):
         try:
 	        # Try and set skype window to normal
-            remote_bus = dbus.SessionBus()
-            out_connection = remote_bus.get_object('com.Skype.API', '/com/Skype')
+            out_connection = bus.get_object('com.Skype.API', '/com/Skype')
             out_connection.Invoke('NAME Skype4Py')
             out_connection.Invoke('PROTOCOL 5')
-            #out_connection.Invoke('SET WINDOWSTATE MAXIMIZED')
             out_connection.Invoke('SET WINDOWSTATE NORMAL')
             out_connection.Invoke('FOCUS')
             sys.exit(0)
