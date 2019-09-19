@@ -1,5 +1,5 @@
 # skype-wrapper
 Integrates Skype with Unity - ppa:skype-wrapper/ppa
-```sh
+```bash
 sudo apt install tst
 ```
